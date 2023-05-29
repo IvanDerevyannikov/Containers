@@ -1,14 +1,22 @@
 #pragma once
 #include <initializer_list>
 #include <exception>
+#include "helper.h"
 
 template <typename T>
 class MyList
 {
-	class Iterator;
+	//class Iterator;
 public:
 	using value_type = T;
 	using reference = value_type&;
+	template<bool isCnst>
+	class Common_iterator;
+
+	using iterator = Common_iterator<false>;
+	using const_iterator = Common_iterator<true>;
+	using reverse_iterator = ReverseListIter<iterator>;
+	using const_reverse_iterator = ReverseListIter<const_iterator>;
 
 	explicit MyList();
 	explicit MyList(std::initializer_list<T> init);
@@ -52,14 +60,45 @@ public:
 		return static_cast<Elem*>(baseEl.prev)->val;
 	}
 
-	Iterator begin()
+	iterator begin()
 	{
-		return Iterator(baseEl.next,&baseEl);
+		return iterator(baseEl.next, &baseEl);
 	}
 
-	Iterator end()
+
+	iterator end()
 	{
-		return Iterator(&baseEl, &baseEl);
+		return iterator(&baseEl, &baseEl);
+	}
+
+	const_iterator cbegin()
+	{
+		return const_iterator(baseEl.next, &baseEl);
+	}
+
+	const_iterator cend()
+	{
+		return const_iterator(&baseEl, &baseEl);
+	}
+
+	reverse_iterator rbegin()
+	{
+		return reverse_iterator(--end());
+	}
+
+	reverse_iterator rend()
+	{
+		return reverse_iterator(end());
+	}
+
+	const_reverse_iterator crbegin()
+	{
+		return const_reverse_iterator(--cend());
+	}
+
+	const_reverse_iterator crend()
+	{
+		return const_reverse_iterator(cend());
 	}
 
 	bool empty() {
@@ -73,7 +112,7 @@ public:
 
 	void clear();
 
-	Iterator  insert(Iterator pos, const T& value)
+	iterator  insert(iterator pos, const T& value)
 	{
 		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
 		new(next) Elem(value);
@@ -86,7 +125,7 @@ public:
 		return pos;
 	}
 
-	Iterator insert(Iterator pos, T&& value) 
+	iterator insert(iterator pos, T&& value) 
 	{
 		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
 		new(next) Elem(std::move(value));
@@ -99,9 +138,9 @@ public:
 		return pos;
 	}
 
-	Iterator insert(Iterator pos, std::size_t count, const T& value) 
+	iterator insert(iterator pos, std::size_t count, const T& value) 
 	{
-		Iterator tmp = pos;
+		iterator tmp = pos;
 		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
 		new(next) Elem(pos->val);
 		next->next = pos->next;
@@ -119,9 +158,9 @@ public:
 		return tmp;
 	}
 
-	Iterator insert(Iterator pos, std::initializer_list<T> ilist)
+	iterator insert(iterator pos, std::initializer_list<T> ilist)
 	{
-		Iterator tmp = pos;
+		iterator tmp = pos;
 		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
 		new(next) Elem(pos->val);
 		next->next = pos->next;
@@ -140,7 +179,7 @@ public:
 		return tmp;
 	}
 
-	Iterator insert(Iterator pos,Iterator left, Iterator right)
+	iterator insert(iterator pos,iterator left, iterator right)
 	{
 		if (left.fake != right.fake) throw std::length_error("other iterators");
 		size_t size_iter = 0;
@@ -165,7 +204,7 @@ public:
 	}
 
 	template<typename... Args>
-	Iterator emplace(Iterator pos, Args&&... arg)
+	iterator emplace(iterator pos, Args&&... arg)
 	{
 		auto tmp = pos;
 		BaseElem* empl=reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
@@ -177,25 +216,25 @@ public:
 		return --tmp;
 	}
 
-	Iterator erase(Iterator pos) 
+	iterator erase(iterator pos) 
 	{
 		if (pos.fake != this->begin().fake) throw std::out_of_range("Bad iterator");
 		if (pos.iter == pos.fake) throw std::out_of_range("Out of range");
-		Iterator tmp = pos;
+		iterator tmp = pos;
 		++tmp;
 		tmp.iter->prev = pos.iter->prev;
 		pos.iter->prev->next = tmp.iter;
 		static_cast<Elem*>(pos.iter)->val.~T();
 		delete[] reinterpret_cast<char*>(pos.iter);
-		pos = Iterator();
+		pos = iterator();
 		--(this->listSize);
 		return tmp;
 	}
 
-	Iterator erase(Iterator first, Iterator last)
+	iterator erase(iterator first, iterator last)
 	{
 		if (first.fake != this->begin().fake || last.fake != this->begin().fake ) throw std::out_of_range("Bad iterator");
-		Iterator tmp = first;
+		iterator tmp = first;
 		first.iter->prev->next = last.iter;
 		if (last.iter != last.fake) 
 		{
@@ -236,9 +275,9 @@ public:
 	void reverse() 
 		noexcept;
 
-	void splice(Iterator pos, MyList&& other);
-	void splice(Iterator pos, MyList&& other, Iterator it);
-	void splice(Iterator pos, MyList&& other, Iterator first, Iterator last);
+	void splice(iterator pos, MyList&& other);
+	void splice(iterator pos, MyList&& other, iterator it);
+	void splice(iterator pos, MyList&& other, iterator first, iterator last);
 
 	size_t remove(const T& value);
 	template<typename UnaryPredicate>
@@ -256,6 +295,7 @@ public:
 	void sort(const Compare& comp);
 
 	bool operator==(const MyList& other);
+
 
 private:
 	struct BaseElem
@@ -295,85 +335,87 @@ private:
 		T val;
 	};
 
-	class Iterator
-	{
+	template <bool isCnst>
+	class Common_iterator {
 	public:
-
-		Iterator() 
+		using self_type = Common_iterator;
+		using self_type_reference = Common_iterator&;
+		using type = isConst_t<isCnst,T,const T>;
+		using type_reference = isConst_t<isCnst, T&, const T&>;
+		using type_pointer = isConst_t<isCnst, T*, const T*>;
+		Common_iterator()
 		{
 		}
-		Iterator(BaseElem* el, BaseElem* fake) :iter(el),fake(fake)
+		Common_iterator(BaseElem* el, BaseElem* fake) :iter(el), fake(fake)
 		{
 		}
-		Iterator(const Iterator& other) {
+		Common_iterator(const Common_iterator& other) {
 			iter = other.iter;
 			fake = other.fake;
 		}
-		T* operator->() 
+		type_reference operator*()const {
+			if (iter == nullptr) throw std::out_of_range("Bad Iterator");
+			if (iter == fake) throw std::out_of_range("Out of range");
+			return static_cast<Elem*>(iter)->val;
+		}
+		isConst_t<isCnst, T*, const T*>  operator->()const 
 		{
 			if (iter == nullptr) throw std::out_of_range("Bad Iterator");
 			if (iter == fake) throw std::out_of_range("Out of range");
 			return &static_cast<Elem*>(iter)->val;
 		}
-		T& operator*() 
-		{
-			if (iter == nullptr) throw std::out_of_range("Bad Iterator");
-			if (iter == fake) throw std::out_of_range("Out of range");
-			return static_cast<Elem*>(iter)->val;
-		}
-		Iterator& operator++()
+		Common_iterator& operator++() 
 		{
 			if (iter == fake) throw int(1);
 			iter = iter->next;
 			return *this;
 		}
-		Iterator& operator++(int)
+		Common_iterator& operator++(int) 
 		{
 			if (iter == fake) throw int(1);
-			Iterator tmp(iter,fake);
+			Common_iterator tmp(iter, fake);
 			iter = iter->next;
 			return tmp;
 		}
-		Iterator& operator--()
+		Common_iterator& operator--() 
 		{
 			if (iter == fake->next) throw int(1);
 			iter = iter->prev;
 			return *this;
 		}
-		Iterator& operator--(int)
+		Common_iterator& operator--(int)
 		{
 			if (iter == fake->next) throw int(1);
-			Iterator tmp(iter, fake);
+			Common_iterator tmp(iter, fake);
 			iter = iter->next;
 			return tmp;
 		}
-		Iterator& operator=(const Iterator& other)
+		Common_iterator& operator=(const Common_iterator& other) 
 		{
 			this->iter = other.iter;
 			this->fake = other.fake;
 			return *this;
 		}
 
-		bool operator==(const Iterator& other) 
+		bool operator==(const Common_iterator& other) const 
 		{
 			return iter == other.iter;
 		}
-		bool operator!=(const Iterator& other)
+		bool operator!=(const Common_iterator& other) const 
 		{
-			return !((*this)==other);
+			return !((*this) == other);
 		}
-		
 
-		BaseElem* iter=nullptr;
-		BaseElem* fake=nullptr;
+		BaseElem* iter = nullptr;
+		BaseElem* fake = nullptr;
 	};
 
 
-	bool isSorted(Iterator first);
+	bool isSorted(iterator first);
 
 
 	template<typename Pred>
-	bool isSorted(Iterator first,Pred pred);
+	bool isSorted(iterator first,Pred pred);
 
 	BaseElem* split(BaseElem* head)
 	{
@@ -530,7 +572,7 @@ MyList<T>::MyList(const MyList& other)
 	}
 	else
 	{
-		Iterator otherIter = other.begin();
+		iterator otherIter = other.begin();
 		baseEl.next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
 		new(baseEl.next) Elem(*otherIter++);
 		BaseElem* dummy = baseEl.next;
@@ -573,7 +615,7 @@ MyList<T>& MyList<T>::operator=( MyList& other)
 	}
 	else
 	{
-		Iterator otherIter = other.begin();
+		iterator otherIter = other.begin();
 		if (!this->listSize)
 		{
 			baseEl.next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
@@ -818,7 +860,7 @@ noexcept
 }
 
 template <typename T>
-void MyList<T>::splice(Iterator pos, MyList&& other)
+void MyList<T>::splice(iterator pos, MyList&& other)
 {
 	other.baseEl.next->prev = pos.iter->prev;
 	pos.iter->prev->next = other.baseEl.next;
@@ -833,7 +875,7 @@ void MyList<T>::splice(Iterator pos, MyList&& other)
 }
 
 template<typename T>
-void MyList<T>::splice(Iterator pos, MyList&& other, Iterator it)
+void MyList<T>::splice(iterator pos, MyList&& other, iterator it)
 {
 	it.iter->prev->next = it->next;
 	it->next->prev=it->prev;
@@ -848,7 +890,7 @@ void MyList<T>::splice(Iterator pos, MyList&& other, Iterator it)
 }
 
 template<typename T>
-void MyList<T>::splice(Iterator pos, MyList&& other, Iterator first, Iterator last)
+void MyList<T>::splice(iterator pos, MyList&& other, iterator first, iterator last)
 {
 	first.iter->prev->next = last.iter;
 	last.iter->next->prev = first.iter->prev;
@@ -1017,7 +1059,7 @@ bool MyList<T>::operator==(const MyList& other)
 	return true;
 }
 template<typename T>
-bool MyList<T>::isSorted(Iterator first)
+bool MyList<T>::isSorted(iterator first)
 {
 	while (first.iter->next != first.fake)
 	{
