@@ -76,3 +76,63 @@ public:
 		return !operator==(other);
 	}
 };
+
+
+
+template <typename First, typename... Rest>
+First getFirstArgument(First first, Rest...) {
+	return first;
+}
+
+//template<typename Key,typename Value>
+//struct Extract_map<Key, Value>
+//{
+//	static constexpr bool is_extract = true;
+//	static const Key& get_key(const Key& key, const Value&)
+//	{
+//		return key;
+//	}
+//};
+//
+//template<typename Key, typename First,typename Second>
+//struct Extract_map<Key, std::pair<const First,Second>>
+//{
+//	static constexpr bool is_extract = std::is_same_v<Key,First>;
+//	static const Key& get_key(const std::pair<const First, Second>& key_val )
+//	{
+//		return key_val.first;
+//	}
+//};
+
+template <class _Ty>
+using rem_ref_cv = std::remove_cv_t<std::remove_reference_t<_Ty>>;
+
+
+template <class _Key, class... _Args>
+struct Extract_map {
+	// by default we can't extract the key in the emplace family and must construct a node we might not use
+	static constexpr bool is_extract = false;
+};
+
+template <class _Key, class _Second>
+struct Extract_map<_Key, _Key, _Second> {
+	// if we would call the pair(key, value) constructor family, we can use the first parameter as the key
+	static constexpr bool is_extract = true;
+	static const _Key& get_key(const _Key& _Val, const _Second&) noexcept {
+		return _Val;
+	}
+};
+
+template <class _Key, class _First, class _Second>
+struct Extract_map<_Key, std::pair<_First, _Second>> {
+	// if we would call the pair(pair<other, other>) constructor family, we can use the pair.first member as the key
+	static constexpr bool is_extract = std::is_same_v<_Key, rem_ref_cv<_First>>;
+	static const _Key& get_key(const std::pair<_First, _Second>& _Val) {
+		return _Val.first;
+	}
+};
+
+//template <typename First>
+//First getFirstArgument(First first) {
+//	return first;
+//}

@@ -112,147 +112,22 @@ public:
 
 	void clear();
 
-	iterator  insert(iterator pos, const T& value)
-	{
-		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
-		new(next) Elem(value);
-		next->next = pos.iter;
-		next->prev = pos.iter->prev;
-		pos.iter->prev->next = next;
-		pos.iter->prev = next;
-		pos.iter = next;
-		++listSize;
-		return pos;
-	}
+	iterator  insert(iterator pos, const T& value);
 
-	iterator insert(iterator pos, T&& value) 
-	{
-		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
-		new(next) Elem(std::move(value));
-		next->next = pos.iter;
-		next->prev = pos.iter->prev;
-		pos.iter->prev->next = next;
-		pos.iter->prev = next;
-		pos.iter = next;
-		++listSize;
-		return pos;
-	}
+	iterator insert(iterator pos, T&& value);
 
-	iterator insert(iterator pos, std::size_t count, const T& value) 
-	{
-		iterator tmp = pos;
-		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
-		new(next) Elem(pos->val);
-		next->next = pos->next;
-		pos->val = value;
-		for (std::size_t i = 1; i < count; ++i) 
-		{
-			pos.iter->next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
-			new(pos.iter->next) Elem(value);
-			pos.iter->next->prev = pos.iter;
-			++pos;
-		}
-		pos.iter->next = next;
-		next->prev = pos.iter;
-		listSize+=count;
-		return tmp;
-	}
+	iterator insert(iterator pos, std::size_t count, const T& value);
 
-	iterator insert(iterator pos, std::initializer_list<T> ilist)
-	{
-		iterator tmp = pos;
-		BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
-		new(next) Elem(pos->val);
-		next->next = pos->next;
-		const auto inIt = ilist.begin();
-		pos->val = *(inIt++);
-		for (size_t i = 1; i < ilist.size(); ++i)
-		{
-			pos.iter->next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
-			new(pos.iter->next) Elem(*(inIt++));
-			pos.iter->next->prev = pos.iter;
-			++pos;
-		}
-		pos.iter->next = next;
-		next->prev = pos.iter;
-		listSize += ilist.size();
-		return tmp;
-	}
+	iterator insert(iterator pos, std::initializer_list<T> ilist);
 
-	iterator insert(iterator pos,iterator left, iterator right)
-	{
-		if (left.fake != right.fake) throw std::length_error("other iterators");
-		size_t size_iter = 0;
-		BaseElem* next = pos.iter;
-		BaseElem* tmp = pos.iter->prev;
-		while (left != right)
-		{
-			pos.iter = new Elem(*(left++));
-			pos.iter->prev =tmp;
-			tmp->next = pos.iter;
-			tmp = tmp->next;
-			++pos;
-			++size_iter;
-		}
-		
-		pos.iter = next;
-		pos.iter->prev =tmp ;
-		tmp->next = pos.iter;
-		listSize +=size_iter;
-
-		return pos;
-	}
+	iterator insert(iterator pos, iterator left, iterator right);
 
 	template<typename... Args>
-	iterator emplace(iterator pos, Args&&... arg)
-	{
-		auto tmp = pos;
-		BaseElem* empl=reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
-		new (empl)Elem(T(std::forward<Args>(arg)...));
-		empl->prev = pos->next;
-		empl->next = pos.operator->();
-		pos->prev = empl;
-		++listSize;
-		return --tmp;
-	}
+	iterator emplace(iterator pos, Args&&... arg);
 
-	iterator erase(iterator pos) 
-	{
-		if (pos.fake != this->begin().fake) throw std::out_of_range("Bad iterator");
-		if (pos.iter == pos.fake) throw std::out_of_range("Out of range");
-		iterator tmp = pos;
-		++tmp;
-		tmp.iter->prev = pos.iter->prev;
-		pos.iter->prev->next = tmp.iter;
-		static_cast<Elem*>(pos.iter)->val.~T();
-		delete[] reinterpret_cast<char*>(pos.iter);
-		pos = iterator();
-		--(this->listSize);
-		return tmp;
-	}
+	iterator erase(iterator pos);
 
-	iterator erase(iterator first, iterator last)
-	{
-		if (first.fake != this->begin().fake || last.fake != this->begin().fake ) throw std::out_of_range("Bad iterator");
-		iterator tmp = first;
-		first.iter->prev->next = last.iter;
-		if (last.iter != last.fake) 
-		{
-			last.iter->prev = tmp->prev;
-		}
-		else 
-		{
-			last.iter->prev = last.iter;
-		}
-
-		while (first != last) {
-			++tmp;
-			static_cast<Elem*>(first.operator->())->val.~T();
-			delete[] reinterpret_cast<char*>(first.operator->());
-			first = tmp;
-		}
-		return tmp;
-	}
+	iterator erase(iterator first, iterator last);
 
 	void push_back(const T& value);
 	void push_back(T&& value);
@@ -693,6 +568,142 @@ void MyList<T>::clear()
 	baseEl.prev = &baseEl;
 }
 
+template<typename T>
+typename MyList<T>::iterator MyList<T>::insert(iterator pos, const T& value)
+{
+	BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
+	new(next) Elem(value);
+	next->next = pos.iter;
+	next->prev = pos.iter->prev;
+	pos.iter->prev->next = next;
+	pos.iter->prev = next;
+	pos.iter = next;
+	++listSize;
+	return pos;
+}
+
+template<typename T>
+typename MyList<T>::iterator MyList<T>::insert(iterator pos, T&& value)
+{
+	BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
+	new(next) Elem(std::move(value));
+	next->next = pos.iter;
+	next->prev = pos.iter->prev;
+	pos.iter->prev->next = next;
+	pos.iter->prev = next;
+	pos.iter = next;
+	++listSize;
+	return pos;
+}
+
+template<typename T>
+typename MyList<T>::iterator MyList<T>::insert(iterator pos, std::size_t count, const T& value)
+{
+	iterator tmp = pos;
+	BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
+	new(next) Elem(pos->val);
+	next->next = pos->next;
+	pos->val = value;
+	for (std::size_t i = 1; i < count; ++i)
+	{
+		pos.iter->next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
+		new(pos.iter->next) Elem(value);
+		pos.iter->next->prev = pos.iter;
+		++pos;
+	}
+	pos.iter->next = next;
+	next->prev = pos.iter;
+	listSize += count;
+	return tmp;
+}
+
+template<typename T>
+typename MyList<T>::iterator MyList<T>::insert(iterator pos, std::initializer_list<T> ilist)
+{
+	iterator tmp = pos;
+	BaseElem* next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
+	new(next) Elem(pos->val);
+	next->next = pos->next;
+	const auto inIt = ilist.begin();
+	pos->val = *(inIt++);
+	for (size_t i = 1; i < ilist.size(); ++i)
+	{
+		pos.iter->next = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
+		new(pos.iter->next) Elem(*(inIt++));
+		pos.iter->next->prev = pos.iter;
+		++pos;
+	}
+	pos.iter->next = next;
+	next->prev = pos.iter;
+	listSize += ilist.size();
+	return tmp;
+}
+
+template<typename T>
+typename MyList<T>::iterator MyList<T>::insert(iterator pos, iterator left, iterator right)
+{
+	if (left.fake != right.fake) throw std::length_error("other iterators");
+	size_t size_iter = 0;
+	BaseElem* next = pos.iter;
+	BaseElem* tmp = pos.iter->prev;
+	while (left != right)
+	{
+		pos.iter = new Elem(*(left++));
+		pos.iter->prev = tmp;
+		tmp->next = pos.iter;
+		tmp = tmp->next;
+		++pos;
+		++size_iter;
+	}
+
+	pos.iter = next;
+	pos.iter->prev = tmp;
+	tmp->next = pos.iter;
+	listSize += size_iter;
+
+	return pos;
+}
+
+template<typename T>
+typename MyList<T>::iterator MyList<T>::erase(iterator pos)
+{
+	if (pos.fake != this->begin().fake) throw std::out_of_range("Bad iterator");
+	if (pos.iter == pos.fake) throw std::out_of_range("Out of range");
+	iterator tmp = pos;
+	++tmp;
+	tmp.iter->prev = pos.iter->prev;
+	pos.iter->prev->next = tmp.iter;
+	static_cast<Elem*>(pos.iter)->val.~T();
+	delete[] reinterpret_cast<char*>(pos.iter);
+	pos = iterator();
+	--(this->listSize);
+	return tmp;
+}
+
+template<typename T>
+typename MyList<T>::iterator MyList<T>::erase(iterator first, iterator last)
+{
+	if (first.fake != this->begin().fake || last.fake != this->begin().fake) throw std::out_of_range("Bad iterator");
+	iterator tmp = first;
+	first.iter->prev->next = last.iter;
+	if (last.iter != last.fake)
+	{
+		last.iter->prev = tmp->prev;
+	}
+	else
+	{
+		last.iter->prev = last.iter;
+	}
+
+	while (first != last) {
+		++tmp;
+		static_cast<Elem*>(first.operator->())->val.~T();
+		delete[] reinterpret_cast<char*>(first.operator->());
+		first = tmp;
+	}
+	return tmp;
+}
+
 
 
 template <typename T>
@@ -717,6 +728,20 @@ void MyList<T>::push_back(T&& value)
 	baseEl.prev->next = last;
 	baseEl.prev = last;
 	++listSize;
+}
+
+template<typename T>
+template<typename ...Args>
+typename MyList<T>::iterator MyList<T>::emplace(iterator pos, Args && ...arg)
+{
+	auto tmp = pos;
+	BaseElem* empl = reinterpret_cast<Elem*>(new char[sizeof(Elem)]);
+	new (empl)Elem(T(std::forward<Args>(arg)...));
+	empl->prev = pos->next;
+	empl->next = pos.operator->();
+	pos->prev = empl;
+	++listSize;
+	return --tmp;
 }
 
 template<typename T>
