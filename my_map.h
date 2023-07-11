@@ -108,7 +108,7 @@ public:
 	void _depth()
 	{
 		depth_l(0, m_head);
-		depth_r(0, m_head);
+		//depth_r(0, m_head);
 	}
 	iterator find(const Key& key);
 	const_iterator find(const Key& key) const;
@@ -235,28 +235,34 @@ private:
 	template<typename ...Args>
 	BaseNode* create_node(Args&&...arg);
 	BaseNode* create_node( const value_type& value);
+	BaseNode* find_min_node(BaseNode* node);
+	BaseNode* find_max_node(BaseNode* node);
+	BaseNode* find_node(const Key& key);
+	BaseNode* copy_nodes(BaseNode* node);
+	void copy_map(BaseNode* my_node, BaseNode* other_node);
 
 	bool is_left_child(BaseNode* child, BaseNode* parent);
 	BaseNode* find_grandparent(BaseNode* node);
 	BaseNode* find_uncle(BaseNode* node);
-	void rotate_nodes(BaseNode* child,BaseNode* parent);
+	BaseNode* find_brother(BaseNode* node);
+
+	void insert_rebalance_tree(BaseNode* node);
 	void insert_case_1(BaseNode* node);
 	void insert_case_2(BaseNode* node);
-	void rebalance_tree(BaseNode* node);
+	void erase_rebalance_tree(BaseNode* parent,BaseNode* brother);
+	void rotate_nodes(BaseNode* child, BaseNode* parent);
+	bool rotate_case_2(BaseNode* node);
+	void erase_rotate_case_2_1_1(BaseNode* child, BaseNode* parent);
+
 
 	template <typename ...Args>
 	void insert_node(Args&&... args);
 
-	BaseNode* find_min_node(BaseNode* node);
+	void delete_node(BaseNode* node);
 	void clear_nodes(BaseNode* node);
-	BaseNode* find_node(const Key& key);
 
-	BaseNode* copy_nodes(BaseNode* node);
 
-	void copy_map(BaseNode* my_node, BaseNode* other_node);
-
-	bool rotate_case_2(BaseNode* node);
-
+	//function for test
 	void check_parent(BaseNode* node);
 };
 
@@ -349,7 +355,7 @@ Value& My_map<Key, Value, Comp, Alloc>::operator[](const Key& key)
 				tmp->left = m_alloc.allocate(1);
 				m_alloc.construct(static_cast<Node*>(tmp->left), BaseNode(true), std::pair<const Key, Value>(key, Value()));
 				tmp->left->parent = tmp;
-				rebalance_tree(tmp->left);
+				insert_rebalance_tree(tmp->left);
 			}
 			tmp = tmp->left;
 		}
@@ -361,7 +367,7 @@ Value& My_map<Key, Value, Comp, Alloc>::operator[](const Key& key)
 				tmp->right = m_alloc.allocate(1);
 				m_alloc.construct(static_cast<Node*>(tmp->right), BaseNode(true), std::pair<const Key, Value>(key, Value()));
 				tmp->right->parent = tmp;
-				rebalance_tree(tmp->right);
+				insert_rebalance_tree(tmp->right);
 			}
 			tmp = tmp->right;
 		}
@@ -382,7 +388,7 @@ Value& My_map<Key, Value, Comp, Alloc>::operator[](Key&& key)
 				tmp->left = m_alloc.allocate(1);
 				m_alloc.construct(static_cast<Node*>(tmp->left), BaseNode(true), std::pair<const Key, Value>(key, Value()));
 				tmp->left->parent = tmp;
-				rebalance_tree(tmp->left);
+				insert_rebalance_tree(tmp->left);
 			}
 			tmp = tmp->left;
 		}
@@ -394,7 +400,7 @@ Value& My_map<Key, Value, Comp, Alloc>::operator[](Key&& key)
 				tmp->right = m_alloc.allocate(1);
 				m_alloc.construct(static_cast<Node*>(tmp->right), BaseNode(true), std::pair<const Key, Value>(key, Value()));
 				tmp->right->parent = tmp;
-				rebalance_tree(tmp->right);
+				insert_rebalance_tree(tmp->right);
 			}
 			tmp = tmp->right;
 		}
@@ -507,7 +513,7 @@ std::pair<typename My_map<Key, Value, Comp, Alloc>::iterator, bool> My_map<Key, 
 					{
 						parent->right = create_node(args...);
 						parent->right->parent = parent;
-						rebalance_tree(parent->right);
+						insert_rebalance_tree(parent->right);
 						return std::make_pair(parent->right, true);
 					}
 					else
@@ -521,7 +527,7 @@ std::pair<typename My_map<Key, Value, Comp, Alloc>::iterator, bool> My_map<Key, 
 					{
 						parent->left = create_node(args...);
 						parent->left->parent = parent;
-						rebalance_tree(parent->left);
+						insert_rebalance_tree(parent->left);
 						return std::make_pair(parent->left, true);
 					}
 					else
@@ -540,11 +546,11 @@ template<typename Key, typename Value, typename Comp, typename Alloc>
 size_t My_map<Key, Value, Comp, Alloc>::erase(const Key& key)
 {
 	BaseNode* node = find_node(key);
-	if (node == &m_sheet)
+	if (node == &m_sheet || node==nullptr)
 	{
 		return -1;
 	}
-
+	delete_node(node);
 	return 1;
 }
 
@@ -553,12 +559,19 @@ inline void My_map<Key, Value, Comp, Alloc>::depth_l(int height, BaseNode* node)
 {
 	if (node == nullptr) 
 	{
-		std::cout << height << '\n';
+		std::cout << height+1 << '\n';
 		return;
 	}
-
-	depth_l(height + 1, node->left);
-	depth_l(height + 1, node->right);
+	if (node->is_black) 
+	{
+		depth_l(height + 1, node->left);
+		depth_l(height + 1, node->right);
+	}
+	else
+	{
+		depth_l(height, node->left);
+		depth_l(height, node->right);
+	}
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -664,6 +677,20 @@ My_map<Key, Value, Comp, Alloc>::find_uncle(BaseNode* node)
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::BaseNode* My_map<Key, Value, Comp, Alloc>::find_brother(BaseNode* node)
+{
+	if (is_left_child(node, node->parent))
+	{
+		return node->parent->right;
+	}
+	else
+	{
+		return node->parent->left;
+	}
+	return nullptr;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
 void My_map<Key, Value, Comp, Alloc>::rotate_nodes(BaseNode* child,BaseNode* parent)
 {
 	BaseNode* grandparent = find_grandparent(child);
@@ -762,7 +789,7 @@ void My_map<Key, Value, Comp, Alloc>::insert_case_1(BaseNode* node)
 		grandparent->is_black = true;
 		return;
 	}
-	rebalance_tree(grandparent);
+	insert_rebalance_tree(grandparent);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -784,7 +811,80 @@ void My_map<Key, Value, Comp, Alloc>::insert_case_2(BaseNode* node)
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
-void My_map<Key, Value, Comp, Alloc>::rebalance_tree(BaseNode* node)
+void My_map<Key, Value, Comp, Alloc>::erase_rebalance_tree(BaseNode* parent,BaseNode* brother)
+{
+	auto node_has_red_child = [](BaseNode* node)->bool
+	{
+		if ((node->left && !node->left->is_black) || (node->right && !node->right->is_black))
+		{
+			return true;
+		}
+		return false;
+	};
+	auto find_red_child = [](BaseNode* node)->BaseNode*
+	{
+		if (node->left && !node->left->is_black)
+		{
+			return node->left;
+		}
+		else
+		{
+			return node->right;
+		}
+		return nullptr;
+	};
+
+	if (!parent->is_black)
+	{
+		if (brother == nullptr || (brother->is_black && node_has_red_child(brother)))
+		{
+			erase_rotate_case_2_1_1(brother, parent);
+		}
+		else
+		{
+			parent->is_black = true;
+			brother->is_black = false;
+		}
+	}
+	else
+	{
+		if (brother == nullptr || (brother->is_black && !node_has_red_child(brother)))
+		{
+			brother->is_black = false;
+			erase_rebalance_tree(parent->parent, find_brother(parent));
+		}
+		else if (brother->is_black && node_has_red_child(brother))
+		{
+			BaseNode* red_child = find_red_child(brother);
+			rotate_nodes(brother, red_child);
+			rotate_nodes(parent, red_child);
+		}
+		else
+		{
+			if (node_has_red_child(brother->left))
+			{
+				BaseNode* child = brother->left;
+				rotate_nodes(child, brother);
+				rotate_nodes(child, parent);
+			}
+			else if (node_has_red_child(brother->left))
+			{
+				BaseNode* child = brother->right;
+				rotate_nodes(child, brother);
+				rotate_nodes(child, parent);
+			}
+			else
+			{
+				rotate_nodes(brother, parent);
+			}
+
+		}
+
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+void My_map<Key, Value, Comp, Alloc>::insert_rebalance_tree(BaseNode* node)
 {
 	if (node == nullptr)
 	{
@@ -845,7 +945,7 @@ void My_map<Key, Value, Comp, Alloc>::insert_node(Args && ...args)
 				{
 					parent->right = create_node(args...);
 					parent->right->parent = parent;
-					rebalance_tree(parent->right);
+					insert_rebalance_tree(parent->right);
 					break;
 				}
 				else
@@ -859,7 +959,7 @@ void My_map<Key, Value, Comp, Alloc>::insert_node(Args && ...args)
 				{
 					parent->left = create_node(args...);
 					parent->left->parent = parent;
-					rebalance_tree(parent->left);
+					insert_rebalance_tree(parent->left);
 					break;
 				}
 				else
@@ -876,11 +976,107 @@ template<typename Key, typename Value, typename Comp, typename Alloc>
 typename My_map<Key, Value, Comp, Alloc>::BaseNode* 
 My_map<Key, Value, Comp, Alloc>::find_min_node(BaseNode* node)
 {
+	if (node == nullptr)
+	{
+		return nullptr;
+	}
 	if (node->left == nullptr)
 	{
 		return node;
 	}
 	find_min_node(node->left);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::BaseNode* My_map<Key, Value, Comp, Alloc>::find_max_node(BaseNode* node)
+{
+	if (node == nullptr)
+	{
+		return nullptr;
+	}
+	if (node->right == nullptr)
+	{
+		return node;
+	}
+	find_max_node(node->right);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+void My_map<Key, Value, Comp, Alloc>::delete_node(BaseNode* node)
+{
+	BaseNode* parent = node->parent;
+	if (!node->is_black && node->left == nullptr && node->right == nullptr)
+	{
+		//BaseNode* parent = node->parent;
+		if (is_left_child(node, parent))
+		{
+			parent->left = nullptr;
+		}
+		else
+		{
+			parent->right = nullptr;
+		}
+		m_alloc.destroy(static_cast<Node*>(node));
+		m_alloc.deallocate(static_cast<Node*>(node),1);
+		return;
+	}
+	if (node->is_black && node->left == nullptr && node->right == nullptr)
+	{
+		//BaseNode* parent = node->parent;
+		if (is_left_child(node, parent))
+		{
+			parent->left = nullptr;
+			erase_rebalance_tree(parent,parent->right);
+		}
+		else
+		{
+			parent->right = nullptr;
+			erase_rebalance_tree(parent, parent->left);
+		}
+		m_alloc.destroy(static_cast<Node*>(node));
+		m_alloc.deallocate(static_cast<Node*>(node), 1);
+		return;
+	}
+	if (node->is_black && node->left == nullptr || node->right == nullptr)
+	{
+		//BaseNode* parent = node->parent;
+		if (is_left_child(node, parent))
+		{
+			if (node->left)
+			{
+				parent->left = node->left;
+				node->left->parent = parent;
+				node->left->is_black = true;
+			}
+			else
+			{
+				parent->left = node->right;
+				node->right->parent = parent;
+				node->right->is_black = true;
+			}
+		}
+		else
+		{
+			if (node->left)
+			{
+				parent->right = node->left;
+				node->left->parent = parent;
+				node->left->is_black = true;
+			}
+			else
+			{
+				parent->right = node->right;
+				node->right->parent = parent;
+				node->right->is_black = true;
+			}
+		}
+		m_alloc.destroy(static_cast<Node*>(node));
+		m_alloc.deallocate(static_cast<Node*>(node),1);
+		return;
+	}
+	BaseNode* max_left_node = find_max_node(node->left);
+	static_cast<Node*>(node)->key_val = std::move(static_cast<Node*>(max_left_node)->key_val);
+	delete_node(max_left_node);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -1004,6 +1200,25 @@ bool My_map<Key, Value, Comp, Alloc>::rotate_case_2(BaseNode* node)
 		return true;
 	}
 	return false;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+void My_map<Key, Value, Comp, Alloc>::erase_rotate_case_2_1_1(BaseNode* child, BaseNode* parent)
+{
+	auto find_red_child = [](BaseNode* node)->BaseNode* 
+	{
+		if (node->left && !node->left->is_black)
+		{
+			return node->left;
+		}
+		else
+		{
+			return node->right;
+		}
+	};
+	BaseNode* red_child = find_red_child(child);
+	rotate_nodes(red_child, child);
+	rotate_nodes(red_child,parent);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
