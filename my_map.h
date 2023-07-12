@@ -250,13 +250,17 @@ private:
 	void insert_case_1(BaseNode* node);
 	void insert_case_2(BaseNode* node);
 	void erase_rebalance_tree(BaseNode* parent,BaseNode* brother);
+
 	void rotate_nodes(BaseNode* child, BaseNode* parent);
 	bool rotate_case_2(BaseNode* node);
 	void erase_rotate_case_2_1_1(BaseNode* child, BaseNode* parent);
+	BaseNode* find_red_child(BaseNode* node);
 
 
 	template <typename ...Args>
 	void insert_node(Args&&... args);
+
+	void erase_case_1(BaseNode* node);
 
 	void delete_node(BaseNode* node);
 	void clear_nodes(BaseNode* node);
@@ -821,18 +825,6 @@ void My_map<Key, Value, Comp, Alloc>::erase_rebalance_tree(BaseNode* parent,Base
 		}
 		return false;
 	};
-	auto find_red_child = [](BaseNode* node)->BaseNode*
-	{
-		if (node->left && !node->left->is_black)
-		{
-			return node->left;
-		}
-		else
-		{
-			return node->right;
-		}
-		return nullptr;
-	};
 
 	if (!parent->is_black)
 	{
@@ -850,36 +842,52 @@ void My_map<Key, Value, Comp, Alloc>::erase_rebalance_tree(BaseNode* parent,Base
 	{
 		if (brother == nullptr || (brother->is_black && !node_has_red_child(brother)))
 		{
-			brother->is_black = false;
+			if (parent == m_head)
+			{
+				brother->is_black = false;
+				return;
+			}
+			if (brother)
+			{
+				brother->is_black = false;
+			}
 			erase_rebalance_tree(parent->parent, find_brother(parent));
 		}
 		else if (brother->is_black && node_has_red_child(brother))
 		{
 			BaseNode* red_child = find_red_child(brother);
-			rotate_nodes(brother, red_child);
-			rotate_nodes(parent, red_child);
-		}
-		else
-		{
-			if (node_has_red_child(brother->left))
+			if ((is_left_child(brother, parent) && is_left_child(red_child, brother))
+				|| (!is_left_child(brother, parent) && !is_left_child(red_child, brother)))
 			{
-				BaseNode* child = brother->left;
-				rotate_nodes(child, brother);
-				rotate_nodes(child, parent);
-			}
-			else if (node_has_red_child(brother->left))
-			{
-				BaseNode* child = brother->right;
-				rotate_nodes(child, brother);
-				rotate_nodes(child, parent);
+				rotate_nodes(brother, parent);
+				red_child->is_black = true;
 			}
 			else
 			{
-				rotate_nodes(brother, parent);
+				rotate_nodes(red_child, brother);
+				rotate_nodes(red_child, parent);
+				red_child->is_black = true;
 			}
-
 		}
-
+		else
+		{
+			if (is_left_child(brother, parent))
+			{
+				BaseNode* right_child = brother->right;
+				brother->is_black = true;
+				parent->is_black = false;
+				rotate_nodes(brother, parent);
+				erase_rebalance_tree(parent, right_child);
+			}
+			else if (!is_left_child(brother, parent)) 
+			{
+				BaseNode* left_child = brother->left;
+				brother->is_black = true;
+				parent->is_black = false;
+				rotate_nodes(brother, parent);
+				erase_rebalance_tree(parent, left_child);
+			}
+		}
 	}
 }
 
@@ -1002,28 +1010,40 @@ typename My_map<Key, Value, Comp, Alloc>::BaseNode* My_map<Key, Value, Comp, All
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
+void My_map<Key, Value, Comp, Alloc>::erase_case_1(BaseNode* node)
+{
+	BaseNode* parent = node->parent;
+	if (is_left_child(node, parent))
+	{
+		parent->left = nullptr;
+	}
+	else
+	{
+		parent->right = nullptr;
+	}
+	m_alloc.destroy(static_cast<Node*>(node));
+	m_alloc.deallocate(static_cast<Node*>(node), 1);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
 void My_map<Key, Value, Comp, Alloc>::delete_node(BaseNode* node)
 {
 	BaseNode* parent = node->parent;
 	if (!node->is_black && node->left == nullptr && node->right == nullptr)
 	{
-		//BaseNode* parent = node->parent;
-		if (is_left_child(node, parent))
-		{
-			parent->left = nullptr;
-		}
-		else
-		{
-			parent->right = nullptr;
-		}
-		m_alloc.destroy(static_cast<Node*>(node));
-		m_alloc.deallocate(static_cast<Node*>(node),1);
+		erase_case_1(node);
 		return;
 	}
 	if (node->is_black && node->left == nullptr && node->right == nullptr)
 	{
-		//BaseNode* parent = node->parent;
-		if (is_left_child(node, parent))
+		if (parent == &m_sheet)
+		{
+			m_alloc.destroy(static_cast<Node*>(node));
+			m_alloc.deallocate(static_cast<Node*>(node), 1);
+			m_head = &m_sheet;
+			return;
+		}
+		else if (is_left_child(node, parent))
 		{
 			parent->left = nullptr;
 			erase_rebalance_tree(parent,parent->right);
@@ -1039,35 +1059,69 @@ void My_map<Key, Value, Comp, Alloc>::delete_node(BaseNode* node)
 	}
 	if (node->is_black && node->left == nullptr || node->right == nullptr)
 	{
+
 		//BaseNode* parent = node->parent;
 		if (is_left_child(node, parent))
 		{
 			if (node->left)
 			{
-				parent->left = node->left;
-				node->left->parent = parent;
-				node->left->is_black = true;
+				if (parent == &m_sheet)
+				{
+					m_head = node->left;
+					m_head->parent = &m_sheet;
+				}
+				else
+				{
+					parent->left = node->left;
+					node->left->parent = parent;
+					node->left->is_black = true;
+				}
 			}
 			else
 			{
-				parent->left = node->right;
-				node->right->parent = parent;
-				node->right->is_black = true;
+				if (parent == &m_sheet)
+				{
+					m_head = node->right;
+					m_head->parent = &m_sheet;
+				}
+				else 
+				{
+					parent->left = node->right;
+					node->right->parent = parent;
+					node->right->is_black = true;
+				}
 			}
 		}
 		else
 		{
 			if (node->left)
 			{
-				parent->right = node->left;
-				node->left->parent = parent;
-				node->left->is_black = true;
+				if (parent == &m_sheet)
+				{
+					m_head = node->left;
+					m_head->parent = &m_sheet;
+				}
+				else
+				{
+					parent->right = node->left;
+					node->left->parent = parent;
+					node->left->is_black = true;
+				}
 			}
 			else
 			{
-				parent->right = node->right;
-				node->right->parent = parent;
-				node->right->is_black = true;
+				if (parent == &m_sheet)
+				{
+					m_head = node->right;
+					m_head->parent = &m_sheet;
+				}
+				else 
+				{
+
+					parent->right = node->right;
+					node->right->parent = parent;
+					node->right->is_black = true;
+				}
 			}
 		}
 		m_alloc.destroy(static_cast<Node*>(node));
@@ -1205,20 +1259,35 @@ bool My_map<Key, Value, Comp, Alloc>::rotate_case_2(BaseNode* node)
 template<typename Key, typename Value, typename Comp, typename Alloc>
 void My_map<Key, Value, Comp, Alloc>::erase_rotate_case_2_1_1(BaseNode* child, BaseNode* parent)
 {
-	auto find_red_child = [](BaseNode* node)->BaseNode* 
-	{
-		if (node->left && !node->left->is_black)
-		{
-			return node->left;
-		}
-		else
-		{
-			return node->right;
-		}
-	};
 	BaseNode* red_child = find_red_child(child);
-	rotate_nodes(red_child, child);
-	rotate_nodes(red_child,parent);
+	if ((is_left_child(child, parent) && is_left_child(red_child, child))
+		|| (!is_left_child(child, parent) && !is_left_child(red_child, child)))
+	{
+		rotate_nodes(child, parent);
+		parent->is_black = true;
+		red_child->is_black = true;
+		child->is_black = false;
+	}
+	else 
+	{
+		rotate_nodes(red_child, child);
+		rotate_nodes(red_child, parent);
+		parent->is_black = true;
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::BaseNode* My_map<Key, Value, Comp, Alloc>::find_red_child(BaseNode* node)
+{
+	if (node->left && !node->left->is_black)
+	{
+		return node->left;
+	}
+	else
+	{
+		return node->right;
+	}
+	return nullptr;
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
