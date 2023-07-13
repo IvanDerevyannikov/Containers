@@ -261,6 +261,9 @@ private:
 	void insert_node(Args&&... args);
 
 	void erase_case_1(BaseNode* node);
+	void erase_case_2(BaseNode* node);
+	void erase_case_3(BaseNode* node,BaseNode* replaceable_node);
+	void erase_head(BaseNode* node);
 
 	void delete_node(BaseNode* node);
 	void clear_nodes(BaseNode* node);
@@ -1026,111 +1029,109 @@ void My_map<Key, Value, Comp, Alloc>::erase_case_1(BaseNode* node)
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
-void My_map<Key, Value, Comp, Alloc>::delete_node(BaseNode* node)
+void My_map<Key, Value, Comp, Alloc>::erase_case_2(BaseNode* node)
 {
 	BaseNode* parent = node->parent;
-	if (!node->is_black && node->left == nullptr && node->right == nullptr)
-	{
-		erase_case_1(node);
-		return;
-	}
-	if (node->is_black && node->left == nullptr && node->right == nullptr)
-	{
-		if (parent == &m_sheet)
-		{
-			m_alloc.destroy(static_cast<Node*>(node));
-			m_alloc.deallocate(static_cast<Node*>(node), 1);
-			m_head = &m_sheet;
-			return;
-		}
-		else if (is_left_child(node, parent))
-		{
-			parent->left = nullptr;
-			erase_rebalance_tree(parent,parent->right);
-		}
-		else
-		{
-			parent->right = nullptr;
-			erase_rebalance_tree(parent, parent->left);
-		}
-		m_alloc.destroy(static_cast<Node*>(node));
-		m_alloc.deallocate(static_cast<Node*>(node), 1);
-		return;
-	}
-	if (node->is_black && node->left == nullptr || node->right == nullptr)
-	{
 
-		//BaseNode* parent = node->parent;
-		if (is_left_child(node, parent))
-		{
-			if (node->left)
-			{
-				if (parent == &m_sheet)
-				{
-					m_head = node->left;
-					m_head->parent = &m_sheet;
-				}
-				else
-				{
-					parent->left = node->left;
-					node->left->parent = parent;
-					node->left->is_black = true;
-				}
-			}
-			else
-			{
-				if (parent == &m_sheet)
-				{
-					m_head = node->right;
-					m_head->parent = &m_sheet;
-				}
-				else 
-				{
-					parent->left = node->right;
-					node->right->parent = parent;
-					node->right->is_black = true;
-				}
-			}
-		}
-		else
-		{
-			if (node->left)
-			{
-				if (parent == &m_sheet)
-				{
-					m_head = node->left;
-					m_head->parent = &m_sheet;
-				}
-				else
-				{
-					parent->right = node->left;
-					node->left->parent = parent;
-					node->left->is_black = true;
-				}
-			}
-			else
-			{
-				if (parent == &m_sheet)
-				{
-					m_head = node->right;
-					m_head->parent = &m_sheet;
-				}
-				else 
-				{
-
-					parent->right = node->right;
-					node->right->parent = parent;
-					node->right->is_black = true;
-				}
-			}
-		}
-		m_alloc.destroy(static_cast<Node*>(node));
-		m_alloc.deallocate(static_cast<Node*>(node),1);
-		return;
+	if (is_left_child(node, parent))
+	{
+		parent->left = nullptr;
+		erase_rebalance_tree(parent, parent->right);
 	}
+	else
+	{
+		parent->right = nullptr;
+		erase_rebalance_tree(parent, parent->left);
+	}
+	m_alloc.destroy(static_cast<Node*>(node));
+	m_alloc.deallocate(static_cast<Node*>(node), 1);
+}
+
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+void My_map<Key, Value, Comp, Alloc>::erase_case_3(BaseNode* node,BaseNode* replaceable_node)
+{
+	BaseNode* parent = node->parent;
+	if (is_left_child(node, parent))
+	{
+		parent->left = replaceable_node;
+		replaceable_node->parent = parent;
+		replaceable_node->is_black = true;
+	}
+	else
+	{
+		parent->right = replaceable_node;
+		replaceable_node->parent = parent;
+		replaceable_node->is_black = true;
+	}
+	m_alloc.destroy(static_cast<Node*>(node));
+	m_alloc.deallocate(static_cast<Node*>(node), 1);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+void My_map<Key, Value, Comp, Alloc>::erase_head(BaseNode* node)
+{
+	if (node->left == nullptr && node->right == nullptr)
+	{
+		m_head = &m_sheet;
+
+	}
+	else if (node->left == nullptr)
+	{
+		m_head = node->right;
+		node->right->parent = &m_sheet;
+	}
+	else if (node->right == nullptr)
+	{
+		m_head = node->left;
+		node->left->parent = &m_sheet;
+	}
+	m_alloc.destroy(static_cast<Node*>(node));
+	m_alloc.deallocate(static_cast<Node*>(node), 1);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+void My_map<Key, Value, Comp, Alloc>::delete_node(BaseNode* node)
+{
+	//BaseNode* parent = node->parent;
 	BaseNode* max_left_node = find_max_node(node->left);
-	static_cast<Node*>(node)->key_val = std::move(static_cast<Node*>(max_left_node)->key_val);
-	delete_node(max_left_node);
+	if (max_left_node)
+	{
+		static_cast<Node*>(node)->key_val = std::move(static_cast<Node*>(max_left_node)->key_val);
+		delete_node(max_left_node);
+	}
+	else
+	{
+		if (node->parent == &m_sheet)
+		{
+			erase_head(node);
+		}
+		else if (!node->is_black && node->left == nullptr && node->right == nullptr)
+		{
+			erase_case_1(node);
+		}
+		else if (node->is_black && node->left == nullptr && node->right == nullptr)
+		{
+			erase_case_2(node);
+		}
+		else if (node->is_black && (node->left == nullptr|| node->right == nullptr))
+		{
+			auto find_non_null_node = [](BaseNode* node)
+			{
+				if (node->left)
+				{
+					return node->left;
+				}
+				else
+				{
+					return node->right;
+				}
+			};
+			erase_case_3(node, find_non_null_node(node));
+		}
+	}
+	//m_alloc.destroy(static_cast<Node*>(node));
+	//m_alloc.deallocate(static_cast<Node*>(node), 1);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
