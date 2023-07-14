@@ -96,8 +96,11 @@ public:
 
 	iterator begin();
 	iterator end();
+	const_iterator cbegin();
+	const_iterator cend();
 
 	bool empty();
+
 	std::pair<iterator,bool> insert(const value_type& value);
 	std::pair<iterator, bool> insert(value_type&& value);
 	template<typename InputIt>
@@ -107,11 +110,18 @@ public:
 	template<typename ...Args>
 	std::pair<iterator, bool> emplace(Args&&... args);
 
+	template <typename M>
+	std::pair<iterator, bool> insert_of_assign(const Key& key, M&& obj);
+	template <typename M>
+	std::pair<iterator, bool> insert_or_assign(Key&& key, M&& obj);
+
 	iterator erase(iterator pos);
 	iterator erase(const_iterator pos);
 	iterator erase(iterator first, iterator last);
 	iterator erase(const_iterator first,const_iterator last);
 	size_t erase(const Key& key);
+
+	void swap(My_map& other);
 
 	void clear();
 	void depth_l(int height, BaseNode* node);
@@ -125,6 +135,8 @@ public:
 	const_iterator find(const Key& key) const;
 
 	size_t count(const Key& key);
+
+	bool contains(const Key& key);
 
 public:
 	template<bool isCnst>
@@ -451,6 +463,17 @@ typename My_map<Key, Value, Comp, Alloc>::iterator My_map<Key, Value, Comp, Allo
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::const_iterator My_map<Key, Value, Comp, Alloc>::cbegin()
+{
+	return const_iterator(find_min_node(m_head));
+}
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::const_iterator My_map<Key, Value, Comp, Alloc>::cend()
+{
+	return const_iterator(&m_sheet);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
 bool My_map<Key, Value, Comp, Alloc>::empty() 
 {
 	return m_head == &m_sheet;
@@ -531,10 +554,7 @@ std::pair<typename My_map<Key, Value, Comp, Alloc>::iterator, bool> My_map<Key, 
 					insert_rebalance_tree(parent->right);
 					return std::make_pair(parent->right, true);
 				}
-				else
-				{
-					parent = parent->right;
-				}
+				parent = parent->right;
 			}
 			else
 			{
@@ -545,13 +565,104 @@ std::pair<typename My_map<Key, Value, Comp, Alloc>::iterator, bool> My_map<Key, 
 					insert_rebalance_tree(parent->left);
 					return std::make_pair(parent->left, true);
 				}
-				else
-				{
-					parent = parent->left;
-				}
+				parent = parent->left;
 			}
 		}
 
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<typename M>
+std::pair<typename My_map<Key, Value, Comp, Alloc>::iterator, bool> 
+My_map<Key, Value, Comp, Alloc>::insert_of_assign(const Key& key, M&& obj)
+{
+	if (m_head == &m_sheet)
+	{
+		m_head = m_alloc.allocate(1);
+		m_alloc.construct(static_cast<Node*>(m_head), BaseNode(true), key, std::forward<M>(obj));
+		m_head->left = nullptr;
+		m_head->right = nullptr;
+		m_head->parent = &m_sheet;
+		return std::make_pair(iterator(m_head), true);
+	}
+	BaseNode* parent = m_head;
+	while (true)
+	{
+		if (static_cast<Node*>(parent)->key_val.first == key)
+		{
+			static_cast<Node*>(parent)->key_val = std::make_pair(key, std::forward<M>(obj));
+			return std::make_pair(iterator(parent), false);
+		}
+		if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
+		{
+			if (parent->right == nullptr)
+			{
+				parent->right = create_node(key,std::forward<M>(obj));
+				parent->right->parent = parent;
+				insert_rebalance_tree(parent->right);
+				return std::make_pair(parent->right, true);
+			}
+			parent = parent->right;
+		}
+		else
+		{
+			if (parent->left == nullptr)
+			{
+				parent->left = create_node(key, std::forward<M>(obj));
+				parent->left->parent = parent;
+				insert_rebalance_tree(parent->left);
+				return std::make_pair(parent->left, true);
+			}
+			parent = parent->left;
+		}
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<typename M>
+std::pair<typename My_map<Key, Value, Comp, Alloc>::iterator, bool>
+My_map<Key, Value, Comp, Alloc>::insert_or_assign(Key&& key, M&& obj)
+{
+	if (m_head == &m_sheet)
+	{
+		m_head = m_alloc.allocate(1);
+		m_alloc.construct(static_cast<Node*>(m_head), BaseNode(true), key, std::forward<M>(obj));
+		m_head->left = nullptr;
+		m_head->right = nullptr;
+		m_head->parent = &m_sheet;
+		return std::make_pair(iterator(m_head), true);
+	}
+	BaseNode* parent = m_head;
+	while (true)
+	{
+		if (static_cast<Node*>(parent)->key_val.first == key)
+		{
+			static_cast<Node*>(parent)->key_val = std::make_pair(key, std::forward<M>(obj));
+			return std::make_pair(iterator(parent), false);
+		}
+		if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
+		{
+			if (parent->right == nullptr)
+			{
+				parent->right = create_node(key, std::forward<M>(obj));
+				parent->right->parent = parent;
+				insert_rebalance_tree(parent->right);
+				return std::make_pair(parent->right, true);
+			}
+			parent = parent->right;
+		}
+		else
+		{
+			if (parent->left == nullptr)
+			{
+				parent->left = create_node(key, std::forward<M>(obj));
+				parent->left->parent = parent;
+				insert_rebalance_tree(parent->left);
+				return std::make_pair(parent->left, true);
+			}
+			parent = parent->left;
+		}
 	}
 }
 
@@ -565,6 +676,14 @@ size_t My_map<Key, Value, Comp, Alloc>::erase(const Key& key)
 	}
 	delete_node(node);
 	return 1;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+inline void My_map<Key, Value, Comp, Alloc>::swap(My_map& other)
+{
+	My_map<Key, Value, Comp, Alloc> tmp = std::move(other);
+	other = std::move(*this);
+	*this = std::move(tmp);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -617,6 +736,12 @@ size_t My_map<Key, Value, Comp, Alloc>::count(const Key& key)
 	return 0;
 }
 
+template<typename Key, typename Value, typename Comp, typename Alloc>
+bool My_map<Key, Value, Comp, Alloc>::contains(const Key& key)
+{
+	return count(key);
+}
+
 
 ///
 ///
@@ -627,7 +752,8 @@ size_t My_map<Key, Value, Comp, Alloc>::count(const Key& key)
 ///
 /// 
 /// 
-/// 
+
+
 template<typename Key, typename Value, typename Comp, typename Alloc>
 template<typename ...Args>
 typename My_map<Key, Value, Comp, Alloc>::BaseNode* My_map<Key, Value, Comp, Alloc>::create_node(Args && ...arg)
@@ -871,56 +997,54 @@ void My_map<Key, Value, Comp, Alloc>::insert_node(Args && ...args)
 	if constexpr (Extract_map<Key, rem_ref_cv<Args>...>::is_extract)
 	{
 		key = Extract_map<Key, rem_ref_cv<Args>...>::get_key(args...);
-	}
-
-	if (m_head == &m_sheet)
-	{
-		m_head = m_alloc.allocate(1);
-		m_alloc.construct(static_cast<Node*>(m_head), BaseNode(true), args...);
-		m_head->left = nullptr;
-		m_head->right = nullptr;
-		m_head->parent = &m_sheet;
-	}
-	else
-	{
-		BaseNode* parent = m_head;
-		while (true)
+		if (m_head == &m_sheet)
 		{
-			if (static_cast<Node*>(parent)->key_val.first == key)
+			m_head = m_alloc.allocate(1);
+			m_alloc.construct(static_cast<Node*>(m_head), BaseNode(true), args...);
+			m_head->left = nullptr;
+			m_head->right = nullptr;
+			m_head->parent = &m_sheet;
+		}
+		else
+		{
+			BaseNode* parent = m_head;
+			while (true)
 			{
-				break;
-			}
-			if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
-			{
-				if (parent->right == nullptr)
+				if (static_cast<Node*>(parent)->key_val.first == key)
 				{
-					parent->right = create_node(args...);
-					parent->right->parent = parent;
-					insert_rebalance_tree(parent->right);
 					break;
+				}
+				if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
+				{
+					if (parent->right == nullptr)
+					{
+						parent->right = create_node(args...);
+						parent->right->parent = parent;
+						insert_rebalance_tree(parent->right);
+						break;
+					}
+					else
+					{
+						parent = parent->right;
+					}
 				}
 				else
 				{
-					parent = parent->right;
-				}
-			}
-			else
-			{
-				if (parent->left == nullptr)
-				{
-					parent->left = create_node(args...);
-					parent->left->parent = parent;
-					insert_rebalance_tree(parent->left);
-					break;
-				}
-				else
-				{
-					parent = parent->left;
+					if (parent->left == nullptr)
+					{
+						parent->left = create_node(args...);
+						parent->left->parent = parent;
+						insert_rebalance_tree(parent->left);
+						break;
+					}
+					else
+					{
+						parent = parent->left;
+					}
 				}
 			}
 		}
 	}
-
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -964,8 +1088,6 @@ void My_map<Key, Value, Comp, Alloc>::erase_case_1(BaseNode* node)
 	{
 		parent->right = nullptr;
 	}
-	m_alloc.destroy(static_cast<Node*>(node));
-	m_alloc.deallocate(static_cast<Node*>(node), 1);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -983,8 +1105,6 @@ void My_map<Key, Value, Comp, Alloc>::erase_case_2(BaseNode* node)
 		parent->right = nullptr;
 		erase_rebalance_tree(parent, parent->left);
 	}
-	m_alloc.destroy(static_cast<Node*>(node));
-	m_alloc.deallocate(static_cast<Node*>(node), 1);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -1003,8 +1123,6 @@ void My_map<Key, Value, Comp, Alloc>::erase_case_3(BaseNode* node,BaseNode* repl
 		replaceable_node->parent = parent;
 		replaceable_node->is_black = true;
 	}
-	m_alloc.destroy(static_cast<Node*>(node));
-	m_alloc.deallocate(static_cast<Node*>(node), 1);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -1024,14 +1142,12 @@ void My_map<Key, Value, Comp, Alloc>::erase_head(BaseNode* node)
 		m_head = node->left;
 		node->left->parent = &m_sheet;
 	}
-	m_alloc.destroy(static_cast<Node*>(node));
-	m_alloc.deallocate(static_cast<Node*>(node), 1);
+
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
 void My_map<Key, Value, Comp, Alloc>::delete_node(BaseNode* node)
 {
-	//BaseNode* parent = node->parent;
 	BaseNode* max_left_node = find_max_node(node->left);
 	if (max_left_node)
 	{
@@ -1067,9 +1183,9 @@ void My_map<Key, Value, Comp, Alloc>::delete_node(BaseNode* node)
 			};
 			erase_case_3(node, find_non_null_node(node));
 		}
+		m_alloc.destroy(static_cast<Node*>(node));
+		m_alloc.deallocate(static_cast<Node*>(node), 1);
 	}
-	//m_alloc.destroy(static_cast<Node*>(node));
-	//m_alloc.deallocate(static_cast<Node*>(node), 1);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
