@@ -1,7 +1,6 @@
 #pragma once
 #include<initializer_list>
 #include <utility>
-#include<functional>
 #include "my_allocator.h"
 #include "helper.h"
 
@@ -15,6 +14,7 @@ public:
 	class Common_Iterator;
 	using iterator = Common_Iterator<false>;
 	using const_iterator = Common_Iterator<true>;
+	using reverse_iterator = std::reverse_iterator<iterator>;
 
 public:
 
@@ -117,9 +117,9 @@ public:
 	std::pair<iterator, bool> insert_or_assign(Key&& key, M&& obj);
 
 	iterator erase(iterator pos);
-	iterator erase(const_iterator pos);
+	const_iterator erase(const_iterator pos);
 	iterator erase(iterator first, iterator last);
-	iterator erase(const_iterator first,const_iterator last);
+	const_iterator erase(const_iterator first,const_iterator last);
 	size_t erase(const Key& key);
 
 	void swap(My_map& other);
@@ -153,6 +153,10 @@ public:
 	public:
 		using self_type = Common_Iterator;
 		using self_type_reference = Common_Iterator&;
+		using type = isConst_t<isCnst, BaseNode, const BaseNode>;
+		using type_reference = isConst_t<isCnst, BaseNode&, const BaseNode&>;
+		using type_pointer = isConst_t<isCnst, BaseNode*, const BaseNode*>;
+
 		Common_Iterator() = default;
 		Common_Iterator(BaseNode* iter) :m_iter(iter) {}
 		Common_Iterator& operator=(const Common_Iterator& other)
@@ -262,7 +266,6 @@ private:
 	BaseNode m_sheet=BaseNode(true);
 	Comp m_comp;
 	Node_alloc m_alloc;
-
 
 	std::size_t map_size(BaseNode* node) const;
 
@@ -711,6 +714,47 @@ void My_map<Key, Value, Comp, Alloc>::merge(My_map<Key, Value, C2,Alloc>& source
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::iterator My_map<Key, Value, Comp, Alloc>::erase(iterator pos)
+{
+	auto return_iter = pos;
+	++return_iter;
+	erase(pos->first);
+	return return_iter;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::const_iterator 
+My_map<Key, Value, Comp, Alloc>::erase(const_iterator pos)
+{
+	auto return_iter = pos;
+	++return_iter;
+	erase(pos->first);
+	return return_iter;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::iterator 
+My_map<Key, Value, Comp, Alloc>::erase(iterator first, iterator last)
+{
+	while (first != last)
+	{
+		erase(first++);
+	}
+	return last;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::const_iterator 
+My_map<Key, Value, Comp, Alloc>::erase(const_iterator first, const_iterator last)
+{
+	while (first != last)
+	{
+		erase(first++);
+	}
+	return last;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
 size_t My_map<Key, Value, Comp, Alloc>::erase(const Key& key)
 {
 	BaseNode* node = find_node(key);
@@ -768,6 +812,13 @@ typename My_map<Key, Value, Comp, Alloc>::iterator
 My_map<Key, Value, Comp, Alloc>::find(const Key& key)
 {
 	return iterator(find_node(key));
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::const_iterator 
+My_map<Key, Value, Comp, Alloc>::find(const Key& key) const
+{
+	return const_iterator(find_node(key));
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -1030,12 +1081,10 @@ void My_map<Key, Value, Comp, Alloc>::insert_case_1(BaseNode* node)
 		node->is_black = true;
 		return;
 	}
-
 	BaseNode* grandparent = find_grandparent(node);
 	grandparent->is_black = false;
 	grandparent->left->is_black = !grandparent->left->is_black;
 	grandparent->right->is_black = !grandparent->right->is_black;
-
 	if (grandparent == m_head)
 	{
 		grandparent->is_black = true;
