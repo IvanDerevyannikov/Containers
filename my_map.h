@@ -99,7 +99,8 @@ public:
 	const_iterator cbegin();
 	const_iterator cend();
 
-	bool empty();
+	bool empty() const ;
+	std::size_t size() const noexcept;
 
 	std::pair<iterator,bool> insert(const value_type& value);
 	std::pair<iterator, bool> insert(value_type&& value);
@@ -123,6 +124,9 @@ public:
 
 	void swap(My_map& other);
 
+	template<typename C2>
+	void merge(My_map < Key, Value, C2,Alloc>& source);
+
 	void clear();
 	void depth_l(int height, BaseNode* node);
 	void depth_r(int height, BaseNode* node);
@@ -137,6 +141,10 @@ public:
 	size_t count(const Key& key);
 
 	bool contains(const Key& key);
+	std::pair<iterator, iterator> equal_range(const Key& key);
+
+	iterator lower_bound(const Key& key);
+	iterator upper_bound(const Key& key);
 
 public:
 	template<bool isCnst>
@@ -254,6 +262,9 @@ private:
 	BaseNode m_sheet=BaseNode(true);
 	Comp m_comp;
 	Node_alloc m_alloc;
+
+
+	std::size_t map_size(BaseNode* node) const;
 
 	template<typename ...Args>
 	BaseNode* create_node(Args&&...arg);
@@ -474,9 +485,19 @@ typename My_map<Key, Value, Comp, Alloc>::const_iterator My_map<Key, Value, Comp
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
-bool My_map<Key, Value, Comp, Alloc>::empty() 
+bool My_map<Key, Value, Comp, Alloc>::empty() const
 {
 	return m_head == &m_sheet;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+inline std::size_t My_map<Key, Value, Comp, Alloc>::size() const noexcept
+{
+	if (empty())
+	{
+		return 0;
+	}
+	return map_size(m_head);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -667,6 +688,29 @@ My_map<Key, Value, Comp, Alloc>::insert_or_assign(Key&& key, M&& obj)
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
+template<typename C2>
+void My_map<Key, Value, Comp, Alloc>::merge(My_map<Key, Value, C2,Alloc>& source)
+{
+
+	for (auto&& [key, val] : source)
+	{
+		if (this->find(key) == this->end())
+		{
+			this->emplace(key, val);
+		}
+
+	}
+	for (const auto& key : *this)
+	{
+		auto iter = source.find(key.first);
+		if (iter != source.end() && iter->second==key.second)
+		{
+			source.erase(key.first);
+		}
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
 size_t My_map<Key, Value, Comp, Alloc>::erase(const Key& key)
 {
 	BaseNode* node = find_node(key);
@@ -742,6 +786,96 @@ bool My_map<Key, Value, Comp, Alloc>::contains(const Key& key)
 	return count(key);
 }
 
+template<typename Key, typename Value, typename Comp, typename Alloc>
+std::pair<typename My_map<Key, Value, Comp, Alloc>::iterator, typename My_map<Key, Value, Comp, Alloc>::iterator> 
+My_map<Key, Value, Comp, Alloc>::equal_range(const Key& key)
+{
+	BaseNode* parent = m_head;
+	while (true)
+	{
+		if (static_cast<Node*>(parent)->key_val.first == key)
+		{
+			return std::make_pair(iterator(parent), ++iterator(parent));
+		}
+		if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
+		{
+			if (parent->right == nullptr)
+			{
+				return std::make_pair(++iterator(parent), ++iterator(parent));
+			}
+			parent = parent->right;
+		}
+		else
+		{
+			if (parent->left == nullptr)
+			{
+				return std::make_pair(iterator(parent), iterator(parent));
+			}
+			parent = parent->left;
+		}
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::iterator 
+My_map<Key, Value, Comp, Alloc>::lower_bound(const Key& key)
+{
+	BaseNode* parent = m_head;
+	while (true)
+	{
+		if (static_cast<Node*>(parent)->key_val.first == key)
+		{
+			return iterator(parent);
+		}
+		if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
+		{
+			if (parent->right == nullptr)
+			{
+				++iterator(parent);
+			}
+			parent = parent->right;
+		}
+		else
+		{
+			if (parent->left == nullptr)
+			{
+				iterator(parent);
+			}
+			parent = parent->left;
+		}
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+typename My_map<Key, Value, Comp, Alloc>::iterator 
+My_map<Key, Value, Comp, Alloc>::upper_bound(const Key& key)
+{
+	BaseNode* parent = m_head;
+	while (true)
+	{
+		if (static_cast<Node*>(parent)->key_val.first == key)
+		{
+			return ++iterator(parent);
+		}
+		if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
+		{
+			if (parent->right == nullptr)
+			{
+				++iterator(parent);
+			}
+			parent = parent->right;
+		}
+		else
+		{
+			if (parent->left == nullptr)
+			{
+				iterator(parent);
+			}
+			parent = parent->left;
+		}
+	}
+}
+
 
 ///
 ///
@@ -764,6 +898,20 @@ typename My_map<Key, Value, Comp, Alloc>::BaseNode* My_map<Key, Value, Comp, All
 	node->right = nullptr;
 	node->is_black = false;
 	return node;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+ std::size_t My_map<Key, Value, Comp, Alloc>::map_size(BaseNode* node) const 
+{
+	 if (node == nullptr)
+	 {
+		 return 0;
+	 }
+	 if (node->left == nullptr && node->right == nullptr)
+	 {
+		 return 1;
+	 }
+	 return map_size(node->left) + map_size(node->right)+1;
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
