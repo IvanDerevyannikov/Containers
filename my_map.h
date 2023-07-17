@@ -7,41 +7,18 @@
 template<typename Key, typename Value, typename Comp = std::less<Key>, typename Alloc = My_allocator<std::pair<const Key, Value> >>
 class My_map {
 
-public:
-
+private:
+	struct BaseNode;
 	struct Node;
 	template<bool isCnst>
 	class Common_Iterator;
+public:
 	using iterator = Common_Iterator<false>;
 	using const_iterator = Common_Iterator<true>;
 	using reverse_iterator = std::reverse_iterator<iterator>;
-
-public:
-
 	using value_type = std::pair<const Key, Value>;
 	using Node_alloc = typename Alloc::template rebind<Node>::other;
-
-	struct BaseNode
-	{
-		BaseNode() = default;
-		BaseNode(bool is_black) :is_black(is_black), left(nullptr), right(nullptr),parent(nullptr) {};
-
-		BaseNode* left;
-		BaseNode* right;
-		BaseNode* parent;
-		bool is_black;
-	};
-
-	struct Node :BaseNode
-	{
-		Node() = default;
-		Node(const BaseNode& base_node,const value_type& key_val) :BaseNode(base_node),key_val(key_val) {}
-
-		Node(const BaseNode& base_node, const Key key , Value value) : BaseNode(base_node), key_val(std::make_pair(key,value)) {}
-		
-		std::pair<Key, Value> key_val;
-	};
-
+public:
 
 	My_map() :m_alloc(), m_comp()
 	{
@@ -77,9 +54,7 @@ public:
 	My_map(std::initializer_list<std::pair<const Key,Value>> init, const Alloc&);
 
 	My_map(const My_map& other);
-	My_map(const My_map& other, const Alloc& alloc);
 	My_map(My_map&& other) noexcept;
-	My_map(My_map&& other, const Alloc& alloc);
 
 	~My_map() 
 	{
@@ -91,6 +66,7 @@ public:
 
 	Value& operator[](const Key& key);
 	Value& operator[](Key&& key);
+
 	Value& at(const Key& key);
 	const Value& at(const Key& key) const;
 
@@ -128,25 +104,40 @@ public:
 	void merge(My_map < Key, Value, C2,Alloc>& source);
 
 	void clear();
-	void depth_l(int height, BaseNode* node);
-	void depth_r(int height, BaseNode* node);
-	void _depth()
-	{
-		depth_l(0, m_head);
-		//depth_r(0, m_head);
-	}
+
 	iterator find(const Key& key);
 	const_iterator find(const Key& key) const;
 
 	size_t count(const Key& key);
 
 	bool contains(const Key& key);
-	std::pair<iterator, iterator> equal_range(const Key& key);
 
+	std::pair<iterator, iterator> equal_range(const Key& key);
 	iterator lower_bound(const Key& key);
 	iterator upper_bound(const Key& key);
 
-public:
+private:
+	struct BaseNode
+	{
+		BaseNode() = default;
+		BaseNode(bool is_black) :is_black(is_black), left(nullptr), right(nullptr), parent(nullptr) {};
+
+		BaseNode* left;
+		BaseNode* right;
+		BaseNode* parent;
+		bool is_black;
+	};
+
+	struct Node :BaseNode
+	{
+		Node() = default;
+		Node(const BaseNode& base_node, const value_type& key_val) :BaseNode(base_node), key_val(key_val) {}
+
+		Node(const BaseNode& base_node, const Key key, Value value) : BaseNode(base_node), key_val(std::make_pair(key, value)) {}
+
+		std::pair<Key, Value> key_val;
+	};
+
 	template<bool isCnst>
 	class Common_Iterator
 	{
@@ -159,109 +150,31 @@ public:
 
 		Common_Iterator() = default;
 		Common_Iterator(BaseNode* iter) :m_iter(iter) {}
-		Common_Iterator& operator=(const Common_Iterator& other)
-		{
-			this->m_iter = other.m_iter;
-			return *this;
-		}
+		Common_Iterator& operator=(const Common_Iterator& other);
 
-		isConst_t<isCnst, std::pair<Key, Value>&, const std::pair<Key, Value>&> 
-			operator*()
-		{
-			return static_cast<Node*>(m_iter)->key_val;
-		}
-		isConst_t<isCnst, std::pair<Key, Value>*, const std::pair<Key, Value>*>
-			operator->()
-		{
-			return &operator*();
-		}
-		self_type_reference operator++()
-		{
-			m_iter = find_next_node(m_iter);
-			return *this;
-		}
-		self_type_reference operator++(int) 
-		{
-			auto tmp = Common_Iterator(m_iter);
-			++(*this);
-			return tmp;
-		}
-		self_type_reference operator--()
-		{
-			m_iter = find_prev_node(m_iter);
-			return *this;
-		}
-		self_type_reference operator--(int)
-		{
-			auto tmp = Common_Iterator(m_iter);
-			--(*this);
-			return tmp;
-		}
-		bool operator==(const Common_Iterator& other) const
-		{
-			return this->m_iter == other.m_iter;
-		}
-		bool operator!=(const Common_Iterator& other) const
-		{
-			return !(*this == other);
-		}
+		isConst_t<isCnst, std::pair<Key, Value>&, const std::pair<Key, Value>&> operator*();
+		isConst_t<isCnst, std::pair<Key, Value>*, const std::pair<Key, Value>*> operator->();
+
+		self_type_reference operator++();
+		self_type_reference operator++(int);
+		self_type_reference operator--();
+		self_type_reference operator--(int);
+
+		bool operator==(const Common_Iterator& other) const;
+		bool operator!=(const Common_Iterator& other) const;
+
 	private:
 		BaseNode* m_iter;
 
-		BaseNode* find_minimum(BaseNode* node)
-		{
-			while (node->left!=nullptr)
-			{
-				node = node->left;
-			}
-			return node;
-		}
-		BaseNode* find_maximum(BaseNode* node)
-		{
-			while (node->right != nullptr)
-			{
-				node = node->right;
-			}
-			return node;
-		}
+		BaseNode* find_minimum(BaseNode* node);
+		BaseNode* find_maximum(BaseNode* node);
 
-		BaseNode* find_next_node(BaseNode* node)
-		{
-			if (node->right != nullptr)
-			{
-				return find_minimum(node->right);
-			}
-			else
-			{
-				BaseNode* parent = node->parent;
-				while(parent!=nullptr && node==parent->right)
-				{
-					node = parent;
-					parent = parent->parent;
-				}
-				return parent;
-			}
-		}
-		BaseNode* find_prev_node(BaseNode* node)
-		{
-			if (node->left != nullptr)
-			{
-				return find_maximum(node->left);
-			}
-			else
-			{
-				BaseNode* parent = node->parent;
-				while (parent != nullptr && node == parent->left)
-				{
-					node = parent;
-					parent = parent->parent;
-				}
-				return parent;
-			}
-		}
+		BaseNode* find_next_node(BaseNode* node);
+		BaseNode* find_prev_node(BaseNode* node);
 	};
 
 private:
+
 	BaseNode* m_head;
 	BaseNode m_sheet=BaseNode(true);
 	Comp m_comp;
@@ -272,44 +185,39 @@ private:
 	template<typename ...Args>
 	BaseNode* create_node(Args&&...arg);
 	BaseNode* create_node( const value_type& value);
-	BaseNode* find_min_node(BaseNode* node);
-	BaseNode* find_max_node(BaseNode* node);
-	BaseNode* find_node(const Key& key);
 	BaseNode* copy_nodes(BaseNode* node);
 	void copy_map(BaseNode* my_node, BaseNode* other_node);
 
-	bool is_left_child(BaseNode* child, BaseNode* parent);
-	BaseNode* find_grandparent(BaseNode* node);
-	BaseNode* find_uncle(BaseNode* node);
+	void clear_nodes(BaseNode* node);
+	void delete_node(BaseNode* node);
+
+	BaseNode* find_min_node(BaseNode* node);
+	BaseNode* find_max_node(BaseNode* node);
+	BaseNode* find_node(const Key& key);
 	BaseNode* find_brother(BaseNode* node);
+	BaseNode* find_grandparent(BaseNode* node);
+	BaseNode* find_red_child(BaseNode* node);
+	BaseNode* find_uncle(BaseNode* node);
 
-	void insert_rebalance_tree(BaseNode* node);
-	void insert_case_1(BaseNode* node);
-	void insert_case_2(BaseNode* node);
-	void erase_rebalance_tree(BaseNode* parent,BaseNode* brother);
-
-	void rotate_nodes(BaseNode* child, BaseNode* parent);
-	bool rotate_case_2(BaseNode* node);
+	void erase_rebalance_tree(BaseNode* parent, BaseNode* brother);
 	void erase_rotate_case_2_1_1(BaseNode* child, BaseNode* parent);
 	void erase_rotate_case_2_2_1(BaseNode* brother, BaseNode* parent);
-	BaseNode* find_red_child(BaseNode* node);
+	void erase_case_1(BaseNode* node);
+	void erase_case_2(BaseNode* node);
+	void erase_case_3(BaseNode* node, BaseNode* replaceable_node);
+	void erase_head(BaseNode* node);
 
 	template <typename ...Args>
 	void insert_node(Args&&... args);
+	bool is_left_child(BaseNode* child, BaseNode* parent);
+	void insert_rebalance_tree(BaseNode* node);
+	void insert_case_1(BaseNode* node);
+	void insert_case_2(BaseNode* node);
 
-	void erase_case_1(BaseNode* node);
-	void erase_case_2(BaseNode* node);
-	void erase_case_3(BaseNode* node,BaseNode* replaceable_node);
-	void erase_head(BaseNode* node);
+	void rotate_nodes(BaseNode* child, BaseNode* parent);
+	bool rotate_case_2(BaseNode* node);
 
-	void delete_node(BaseNode* node);
-	void clear_nodes(BaseNode* node);
-
-	//function for test
-	void check_parent(BaseNode* node);
 };
-
-
 
 //
 //
@@ -322,6 +230,30 @@ private:
 //
 
 //Constructors
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<typename Iter>
+My_map<Key, Value, Comp, Alloc>::My_map(Iter first, Iter last, const Comp& comp, const Alloc& alloc)
+{
+	m_sheet.is_black = true;
+	m_sheet.parent = nullptr;
+	m_head = &m_sheet;
+	m_comp = comp;
+	m_alloc = alloc;
+	this->insert(first,last);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<typename Iter>
+My_map<Key, Value, Comp, Alloc>::My_map(Iter first, Iter last, const Alloc& alloc)
+{
+	m_sheet.is_black = true;
+	m_sheet.parent = nullptr;
+	m_head = &m_sheet;
+	m_alloc = alloc;
+	this->insert(first, last);
+}
+
+
 template<typename Key, typename Value,typename Comp, typename Alloc>
 My_map<Key, Value, Comp,Alloc>::My_map(std::initializer_list<std::pair<const Key, Value>> init, 
 								const Comp& comp, const Alloc& alloc):m_comp(comp),m_alloc(alloc)
@@ -332,8 +264,16 @@ My_map<Key, Value, Comp,Alloc>::My_map(std::initializer_list<std::pair<const Key
 	this->insert(init);
 }
 
+template<typename Key, typename Value, typename Comp, typename Alloc>
+inline My_map<Key, Value, Comp, Alloc>::My_map(std::initializer_list<std::pair<const Key, Value>> init, const Alloc&)
+{
+	m_sheet.is_black = true;
+	m_sheet.parent = nullptr;
+	m_head = &m_sheet;
+	this->insert(init);
+}
 
-// copy constuctors
+// copy constuctors assignment operators
 template<typename Key, typename Value, typename Comp, typename Alloc>
 My_map<Key, Value, Comp, Alloc>::My_map(const My_map& other)
 {
@@ -386,6 +326,7 @@ My_map<Key, Value, Comp, Alloc>& My_map<Key, Value, Comp, Alloc>::operator=(My_m
 	return *this;
 }
 
+//operator[] and at function
 template<typename Key, typename Value, typename Comp, typename Alloc>
 Value& My_map<Key, Value, Comp, Alloc>::operator[](const Key& key)
 {
@@ -437,7 +378,6 @@ Value& My_map<Key, Value, Comp, Alloc>::operator[](Key&& key)
 		}
 		else if (static_cast<Node*>(tmp)->key_val.first < key)
 		{
-			//std::cout << static_cast<Node*>(tmp)->key_val.first << ' ' << key << '\n';
 			if (tmp->right == nullptr)
 			{
 				tmp->right = m_alloc.allocate(1);
@@ -463,16 +403,25 @@ Value& My_map<Key, Value, Comp, Alloc>::at(const Key& key)
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
+const Value& My_map<Key, Value, Comp, Alloc>::at(const Key& key) const
+{
+	auto iter = find(key);
+	if (iter == end())
+	{
+		throw std::out_of_range("don't Know this key");
+	}
+	return iter->second;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
 typename My_map<Key, Value, Comp, Alloc>::iterator My_map<Key, Value, Comp, Alloc>::begin()
 {
-	//return Common_Iterator<true>();
 	return	iterator(find_min_node(m_head));
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
 typename My_map<Key, Value, Comp, Alloc>::iterator My_map<Key, Value, Comp, Alloc>::end()
 {
-	//return Common_Iterator<true>();
 	return iterator(&m_sheet);
 }
 
@@ -611,13 +560,8 @@ My_map<Key, Value, Comp, Alloc>::insert_of_assign(const Key& key, M&& obj)
 		return std::make_pair(iterator(m_head), true);
 	}
 	BaseNode* parent = m_head;
-	while (true)
+	while (static_cast<Node*>(parent)->key_val.first == key)
 	{
-		if (static_cast<Node*>(parent)->key_val.first == key)
-		{
-			static_cast<Node*>(parent)->key_val = std::make_pair(key, std::forward<M>(obj));
-			return std::make_pair(iterator(parent), false);
-		}
 		if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
 		{
 			if (parent->right == nullptr)
@@ -641,6 +585,8 @@ My_map<Key, Value, Comp, Alloc>::insert_of_assign(const Key& key, M&& obj)
 			parent = parent->left;
 		}
 	}
+	static_cast<Node*>(parent)->key_val = std::make_pair(key, std::forward<M>(obj));
+	return std::make_pair(iterator(parent), false);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -658,13 +604,8 @@ My_map<Key, Value, Comp, Alloc>::insert_or_assign(Key&& key, M&& obj)
 		return std::make_pair(iterator(m_head), true);
 	}
 	BaseNode* parent = m_head;
-	while (true)
+	while (static_cast<Node*>(parent)->key_val.first == key)
 	{
-		if (static_cast<Node*>(parent)->key_val.first == key)
-		{
-			static_cast<Node*>(parent)->key_val = std::make_pair(key, std::forward<M>(obj));
-			return std::make_pair(iterator(parent), false);
-		}
 		if (m_comp(static_cast<Node*>(parent)->key_val.first, key))
 		{
 			if (parent->right == nullptr)
@@ -688,13 +629,14 @@ My_map<Key, Value, Comp, Alloc>::insert_or_assign(Key&& key, M&& obj)
 			parent = parent->left;
 		}
 	}
+	static_cast<Node*>(parent)->key_val = std::make_pair(key, std::forward<M>(obj));
+	return std::make_pair(iterator(parent), false);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
 template<typename C2>
 void My_map<Key, Value, Comp, Alloc>::merge(My_map<Key, Value, C2,Alloc>& source)
 {
-
 	for (auto&& [key, val] : source)
 	{
 		if (this->find(key) == this->end())
@@ -703,6 +645,7 @@ void My_map<Key, Value, Comp, Alloc>::merge(My_map<Key, Value, C2,Alloc>& source
 		}
 
 	}
+
 	for (const auto& key : *this)
 	{
 		auto iter = source.find(key.first);
@@ -772,39 +715,6 @@ inline void My_map<Key, Value, Comp, Alloc>::swap(My_map& other)
 	My_map<Key, Value, Comp, Alloc> tmp = std::move(other);
 	other = std::move(*this);
 	*this = std::move(tmp);
-}
-
-template<typename Key, typename Value, typename Comp, typename Alloc>
-inline void My_map<Key, Value, Comp, Alloc>::depth_l(int height, BaseNode* node)
-{
-	if (node == nullptr) 
-	{
-		std::cout << height+1 << '\n';
-		return;
-	}
-	if (node->is_black) 
-	{
-		depth_l(height + 1, node->left);
-		depth_l(height + 1, node->right);
-	}
-	else
-	{
-		depth_l(height, node->left);
-		depth_l(height, node->right);
-	}
-}
-
-template<typename Key, typename Value, typename Comp, typename Alloc>
-inline void My_map<Key, Value, Comp, Alloc>::depth_r(int height, BaseNode* node)
-{
-	if (node == nullptr)
-	{
-		std::cout << height << '\n';
-		return;
-	}
-
-	//depth(height + 1, node->left);
-	depth_r(height + 1, node->right);
 }
 
 template<typename Key, typename Value, typename Comp, typename Alloc>
@@ -1559,24 +1469,144 @@ typename My_map<Key, Value, Comp, Alloc>::BaseNode* My_map<Key, Value, Comp, All
 	return nullptr;
 }
 
-template<typename Key, typename Value, typename Comp, typename Alloc>
-void My_map<Key, Value, Comp, Alloc>::check_parent(BaseNode* node)
-{
-	if (node->left == nullptr || node->right == nullptr) return;
-	if (node->left->parent != node) throw 1;
-	if (node->right->parent != node)
-	{
-		throw 2;
-	}
 
-	if (!node->is_black && !node->left->is_black)
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>& My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator=(const Common_Iterator& other)
+{
+	this->m_iter = other.m_iter;
+	return *this;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+isConst_t<isCnst, std::pair<Key, Value>&, const std::pair<Key, Value>&> My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator*()
+{
+	return static_cast<Node*>(m_iter)->key_val;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+isConst_t<isCnst, std::pair<Key, Value>*, const std::pair<Key, Value>*> My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator->()
+{
+	return &operator*();
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::self_type_reference 
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator++()
+{
+	m_iter = find_next_node(m_iter);
+	return *this;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::self_type_reference
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator++(int)
+{
+	auto tmp = Common_Iterator(m_iter);
+	++(*this);
+	return tmp;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::self_type_reference
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator--()
+{
+	m_iter = find_prev_node(m_iter);
+	return *this;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::self_type_reference
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator--(int)
+{
+	auto tmp = Common_Iterator(m_iter);
+	--(*this);
+	return tmp;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+bool My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator==(const Common_Iterator& other) const
+{
+	return this->m_iter == other.m_iter;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+bool My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::operator!=(const Common_Iterator& other) const
+{
+	return !(*this == other);
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::BaseNode* 
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::find_minimum(BaseNode* node)
+{
+	while (node->left != nullptr)
 	{
-		throw 3;
+		node = node->left;
 	}
-	if (!node->is_black && !node->right->is_black)
+	return node;
+}
+
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::BaseNode*
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::find_maximum(BaseNode* node)
+{
+	while (node->right != nullptr)
 	{
-		throw 4;
+		node = node->right;
 	}
-	check_parent(node->left);
-	check_parent(node->right);
+	return node;
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::BaseNode*
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::find_next_node(BaseNode* node)
+{
+	if (node->right != nullptr)
+	{
+		return find_minimum(node->right);
+	}
+	else
+	{
+		BaseNode* parent = node->parent;
+		while (parent != nullptr && node == parent->right)
+		{
+			node = parent;
+			parent = parent->parent;
+		}
+		return parent;
+	}
+}
+
+template<typename Key, typename Value, typename Comp, typename Alloc>
+template<bool isCnst>
+typename My_map<Key, Value, Comp, Alloc>::BaseNode*
+My_map<Key, Value, Comp, Alloc>::Common_Iterator<isCnst>::find_prev_node(BaseNode* node)
+{
+	if (node->left != nullptr)
+	{
+		return find_maximum(node->left);
+	}
+	else
+	{
+		BaseNode* parent = node->parent;
+		while (parent != nullptr && node == parent->left)
+		{
+			node = parent;
+			parent = parent->parent;
+		}
+		return parent;
+	}
 }
